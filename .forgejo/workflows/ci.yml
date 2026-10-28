@@ -1,0 +1,52 @@
+name: Test, publish and deploy
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: homelab-docker
+    container: ghcr.io/catthehacker/ubuntu:act-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: go test -tags nomsgpack ./...
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: homelab-docker
+    container: ghcr.io/catthehacker/ubuntu:act-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Publish image
+        env:
+          REGISTRY_USER: ${{ vars.REGISTRY_USER }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          SOURCE_REPO: ${{ github.repository }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          image="git.cu3rd.ru/$(printf '%s' "$SOURCE_REPO" | tr '[:upper:]' '[:lower:]')"
+          export DOCKER_CONFIG
+          DOCKER_CONFIG=$(mktemp -d)
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$REGISTRY_TOKEN" | docker login git.cu3rd.ru --username "$REGISTRY_USER" --password-stdin
+          docker build -t "$image:$IMAGE_TAG" .
+          docker push "$image:$IMAGE_TAG"
+      - name: Propose self-service deployment
+        uses: https://git.cu3rd.ru/cu3rd/self-service/actions/deploy@0c01ba9639f260f25b98a8abb36a27a6f13563fa
+        with:
+          project: ${{ vars.SELF_SERVICE_PROJECT || github.event.repository.name }}
+          environment: ${{ vars.SELF_SERVICE_ENVIRONMENT || 'dev' }}
+          app: ${{ vars.SELF_SERVICE_APP || 'api' }}
+          tag: ${{ github.sha }}
+          secrets-json: ${{ toJSON(secrets) }}
+          variables-json: ${{ toJSON(vars) }}
+          delivery-token: ${{ secrets.SELF_SERVICE_DELIVERY_TOKEN }}

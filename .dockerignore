@@ -1,0 +1,10 @@
+.git
+.forgejo
+.env
+.env.*
+!.env.example
+README.md
+self-service
+*.test
+*.out
+server

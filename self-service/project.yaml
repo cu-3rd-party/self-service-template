@@ -1,0 +1,32 @@
+name: self-service-template
+team: members
+envs:
+  dev:
+    zone: nxs
+    quota: {cpu: 1, memory: 1Gi, storage: 1Gi}
+    postgres:
+      enabled: true
+      targetEnv: DATABASE_URL
+      format: url
+    apps:
+      api:
+        repo: cu3rd/self-service-template
+        image: git.cu3rd.ru/cu3rd/self-service-template
+        tag: initial
+        port: 8080
+        ingress:
+          - domain: self-service-template.dev.cu3rd.ru
+            targetPort: 8080
+        metrics:
+          enabled: true
+          port: 8080
+          path: /metrics
+        variables:
+          APP_NAME: APP_NAME
+        values:
+          replicas: 1
+          strategy: Recreate
+          probes: {path: /api/health}
+          resources:
+            requests: {cpu: 2m, memory: 30Mi}
+            limits: {cpu: 2m, memory: 30Mi}
